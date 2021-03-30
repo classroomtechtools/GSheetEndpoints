@@ -1,0 +1,22 @@
+{
+  "timeZone": "Asia/Hong_Kong",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Sheets",
+        "serviceId": "sheets",
+        "version": "v4"
+      }
+    ],
+    "libraries": [
+      {
+        "userSymbol": "Endpoints",
+        "libraryId": "1WovLPVqVjZxkxkgCNgI3S_A3eDsX3DWOAoetZgRGW1JpGQ_9TK25y7mB",
+        "version": "17",
+        "developmentMode": false
+      }
+    ]
+  }
+}
