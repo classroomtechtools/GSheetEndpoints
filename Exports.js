@@ -11,3 +11,7 @@ function fromAttached() {
 function create(properties={}) {
   return GSheetEndpoints.create({properties});
 }
+
+function batch () {
+  return Endpoints.batch();
+}

@@ -26,9 +26,9 @@ class APIBase {
     return ret;
   }
 }
-  
+
 class DeveloperMetadata extends APIBase {
-  
+
   get [RESOURCE] () {
     return 'spreadsheets.developerMetadata';
   }
@@ -37,34 +37,71 @@ class DeveloperMetadata extends APIBase {
     return this[API]('get').createRequest('get', {spreadsheetId: this.id, metadataId: id});
   }
 
-  search () {
+  search (additionalMixins) {
     const method = this[API]('search');
-    
+
     const mixin = {
+      ...additionalMixins,
       add: function (prop) {
-        this.payload.dataFilters.push( {developerMetadataLookup:prop} );
+        this.payload.dataFilters.push( {
+          developerMetadataLookup: prop
+        } );
         return this;
       },
-      
+
       byKey: function (key) {
         return this.add({metadataKey: key});
       },
-      
+
       byId: function (id) {
         return this.add({metadataId: id});
       },
-      
+
       byValue: function (value) {
         return this.add({metadataValue: value});
       },
-      
+
       byKeyValue: function (key, value) {
-        this.add({
+        return this.add({
           metadataValue: value,
           metadataKey: key
         });
       },
-      
+
+      byIdKey: function (id, key) {
+        return this.add({
+          metadataId: id,
+          metadataKey: key
+        });
+      },
+
+      byLocationType(type, {metadataKey=null, metadataValue=null}) {
+        const obj = {
+          locationType: type.toUpperCase(),
+        };
+        if (metadataKey) obj.metadataKey = metadataKey;
+        if (metadataValue) obj.metadataValue = metadataValue;
+        return this.add(obj);
+      },
+
+      bySpreadsheetLoc: function ({metadataKey=null, metadataValue=null}) {
+        const obj = {
+          locationType: 'SPREADSHEET',
+        };
+        if (metadataKey) obj.metadataKey = metadataKey;
+        if (metadataValue) obj.metadataValue = metadataValue;
+        return this.add(obj);
+      },
+
+      bySheetLoc: function ({metadataKey=null, metadataValue=null}) {
+        const obj = {
+          locationType: "SHEET"
+        };
+        if (metadataKey) obj.metadataKey = metadataKey;
+        if (metadataValue) obj.metadataValue = metadataValue;
+        return this.add(obj);
+      },
+
       byLocation: function () {
         return {
           sheetId: function (id) {
@@ -77,7 +114,7 @@ class DeveloperMetadata extends APIBase {
         };
       }
     };
-    
+
     return method.createRequest('post', {spreadsheetId: this.id}, {
       payload: {
         dataFilters: []
@@ -90,37 +127,52 @@ class Spreadsheets extends APIBase {
   get [RESOURCE] () {
     return 'spreadsheets';
   }
-  
+
   get () {
     return this[API]('get').createRequest('get', {spreadsheetId: this.id});
   }
-      
-  batchUpdate ({includeSpreadsheetInResponse=true, responseRanges=[], responseIncludeGridData=true}={}) {
+
+  batchUpdate ({includeSpreadsheetInResponse=false, responseRanges=[], responseIncludeGridData=false}={}) {
     // create mixin which populates requests
     const method = this[API]('batchUpdate');
-    
+
     const mixin = {
       createProperty: function (property, value={}) {
         const prop = {};
         prop[property] = {...{}, ...value};  // create copies
         return prop;
       },
-      
+
       addRequest: function (requestProperty) {
         this.payload.requests.push(requestProperty);
       },
-      
+
       // pass fields=null to override
       // FIXME: fields doesn't work in this manner
       add: function (property, value, fields='*') {
         const prop = this.createProperty(property, value);
         if (fields) prop[property]['fields'] = fields;
         this.addRequest(prop);
+        return this;
+      },
+
+      addSheet (name, properties={}) {
+        properties.title = name;
+        return this.add('addSheet', {
+          properties
+        }, null);
+      },
+
+      updateSheetProperties (sheetId, properties, fields) {
+        properties.sheetId = sheetId;
+        return this.add('updateSheetProperties', {
+          properties
+        }, fields);
       },
 
       createMetaData: function ({metadataId=null, metadataKey=null, metadataValue=null}={}, {location=null, visibility=null}={}) {
         if (!metadataKey || !location) throw new Error("At least must have key and location");
-        this.add('createDeveloperMetadata', {
+        return this.add('createDeveloperMetadata', {
           developerMetadata: {
             metadataId, metadataKey, metadataValue, location, visibility
           }
@@ -135,12 +187,12 @@ class Spreadsheets extends APIBase {
         responseRanges,
         responseIncludeGridData,
       },
-    }, mixin);      
+    }, mixin);
   }
-  
-  getByDataFilter () {  
+
+  getByDataFilter () {
     const method = this[API]('getByDataFilter');
-    
+
     function argsToArgument_(key, args) {
       return args.map(function (item) {
         const obj = {};
@@ -148,10 +200,32 @@ class Spreadsheets extends APIBase {
         return obj;
       });
     }
-    
+
     const mixin = {
+      addRow (sheetId, startRowIndex, endRowIndex) {
+        if (!this.payload.dataFilters) this.payload.dataFilters = [];
+        this.payload.dataFilters.push({
+          gridRange: {
+            sheetId: sheetId,
+            startRowIndex,
+            endRowIndex
+          }
+        });
+      },
+
+      addColumn (sheetId, startColumnIndex, endColumnIndex) {
+        if (!this.payload.dataFilters) this.payload.dataFilters = [];
+        this.payload.dataFilters.push({
+          gridRange: {
+            sheetId: sheetId,
+            startColumnIndex,
+            endColumnIndex
+          }
+        });
+      },
+
       addA1Notations: function (...ranges) {
-        if (!this.payload.dataFilters) this.payload.dataFilters = [];          
+        if (!this.payload.dataFilters) this.payload.dataFilters = [];
         this.payload.dataFilters.push( argsToArgument_('a1Range', ranges) );
       },
     };
@@ -168,11 +242,11 @@ class Values extends APIBase {
   get [RESOURCE] () {
     return 'spreadsheets.values';
   }
-  
+
   get (a1Range) {
     return this[API]('get').createRequest('get', {spreadsheetId: this.id, range: a1Range});
   }
-  
+
   update (range, values=[], {valueInputOption="RAW", majorDimension="ROWS"}={}) {
     return this[API]('update').createRequest('put', {spreadsheetId: this.id, range}, {
       params: {
@@ -184,7 +258,7 @@ class Values extends APIBase {
       }
     });
   }
-  
+
   append ({range=A_.req, values=A_.req, majorDimension="ROWS", valueInputOption="RAW"}={}) {
     return this[API]('append').createRequest('post', {
       spreadsheetId: this.id,
@@ -198,9 +272,12 @@ class Values extends APIBase {
       }
     });
   }
-  
-  batchUpdateByDataFilter ({valueInputOption="RAW", includeValuesInResponse=true, responseValueRenderOption="UNFORMATTED_VALUE", responseDateTimeRenderOption="SERIAL_NUMBER"}={}) {
 
+  batchUpdateByDataFilter ({
+    valueInputOption="RAW", includeValuesInResponse=false,
+    responseValueRenderOption="UNFORMATTED_VALUE",
+    responseDateTimeRenderOption="SERIAL_NUMBER"
+  }={}) {
     const mixin = {
       addMetadata: function (md, {majorDimension="ROWS", values=[]}={}) {
         this.payload.data.push({
@@ -210,9 +287,19 @@ class Values extends APIBase {
           values,
           majorDimension
         });
+      },
+
+      addGridRange (gridRange, {majorDimension="ROWS", values=[]}={}) {
+        this.payload.data.push({
+          dataFilter: {
+            gridRange
+          },
+          values,
+          majorDimension
+        })
       }
     }
-  
+
     return this[API]('batchUpdateByDataFilter').createRequest('post', {spreadsheetId: this.id}, {
       payload: {
         data: [],
@@ -220,7 +307,7 @@ class Values extends APIBase {
       },
     }, mixin);
   }
-  
+
   batchGetByDataFilter ({majorDimension="ROWS", valueRenderOption="UNFORMATTED_VALUE", dateTimeRenderOption="SERIAL_NUMBER"}={}) {
     const mixin = {
       metadataId: function (id) {
@@ -245,7 +332,7 @@ class Values extends APIBase {
         });
       }
     }
-  
+
     return this[API]('batchGetByDataFilter').createRequest('post', {spreadsheetId: this.id}, {
       payload: {
         dataFilters: [],
@@ -253,7 +340,7 @@ class Values extends APIBase {
       },
     }, mixin);
   }
-  
+
   batchGet ({range=null, ranges=[], majorDimension="ROWS", valueRenderOption="FORMATTED_VALUE", dateTimeRenderOption="SERIAL_NUMBER"}={}) {
     const mixin = {
       addRange: function (range) {
@@ -271,10 +358,10 @@ class Values extends APIBase {
         if (!this.params.ranges) this.clearRanges();
       }
     };
-    
+
     // in case just one range is supplied
     if (range) ranges.push(range);
-    
+
     return this[API]('batchGet').createRequest('get', {spreadsheetId: this.id}, {
       params: {ranges, majorDimension, valueRenderOption, dateTimeRenderOption},
     }, mixin);
@@ -285,7 +372,7 @@ class Sheets extends APIBase {
   get [RESOURCE] () {
     return 'spreadsheets.sheets';
   }
-        
+
   copyTo({sourceSheet=null, destinationSpreadsheetId=null}={}) {
     if (sourceSheet == null || destinationSpreadsheetId == null) throw new Error("copyTo requires two params");
     return this[API]('copyTo').createRequest('post', {
@@ -302,21 +389,21 @@ class GSheetEndpoints {
   constructor (id=null, service=null) {
     this.id = id;
     if (service) this.service = service;
-    else this.service = "me";  // me is the default ScriptApp.getOAuthToken() 
+    else this.service = "me";  // me is the default ScriptApp.getOAuthToken()
   }
-  
+
   get spreadsheets () {
     return new Spreadsheets(this.id, this.service);
   }
-  
+
   get values () {
     return new Values(this.id, this.service);
   }
-  
+
   get sheets () {
     return new Sheets(this.id, this.service);
   }
-  
+
   get developerMetadata () {
     return new DeveloperMetadata(this.id, this.service);
   }
@@ -324,19 +411,19 @@ class GSheetEndpoints {
   static fromId (id) {
     return new GSheetEndpoints(id);
   }
-  
+
   static fromAttached () {
     const id = (0, eval)("Spreadsheet" + "App").getActiveSpreadsheet().getId();
     return GSheetEndpoints.fromId(id);
   }
-  
+
   static blank () {
     return new GSheetEndpoints();
   }
 
   static create ({properties={}, ...kwargs}={}) {
     if (Object.keys(kwargs).length > 0) throw new Error("GSheetEndpoints#create does not take keys: " + Object.keys().join(", "));
-    
+
     // Instantiate a blank object, fill in the ID
     const sheets = GSheetEndpoints.blank();
     const request = sheets.spreadsheets[API]('create').createRequest('post', {}, {
@@ -353,11 +440,11 @@ class GSheetEndpoints {
     const service = this.getService();
     return this.withService(id, service);
   }
-  
+
   static getService () {
     return Requests.oauthService({service: 'MySheetsService', config: MyConfig});
   }
-  
+
   static withService (id, service) {
     return new GSheetEndpoints(id, service);
   }
